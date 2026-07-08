@@ -1,0 +1,29 @@
+// 아두이노 코드
+const int ledBlue = 8;
+const int ledYellow = 9;
+const int ledRed = 10;
+const int ledGreen = 11;
+const int ledWhite = 12;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(ledBlue, OUTPUT); pinMode(ledYellow, OUTPUT);
+  pinMode(ledRed, OUTPUT); pinMode(ledGreen, OUTPUT); pinMode(ledWhite, OUTPUT);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char cmd = Serial.read();
+    
+    // 일단 모두 끄기
+    digitalWrite(ledBlue, LOW); digitalWrite(ledYellow, LOW);
+    digitalWrite(ledRed, LOW); digitalWrite(ledGreen, LOW); digitalWrite(ledWhite, LOW);
+
+    // 입력받은 번호에 따라 켜기
+    if (cmd == '1') digitalWrite(ledBlue, HIGH);
+    else if (cmd == '2') digitalWrite(ledYellow, HIGH);
+    else if (cmd == '3') digitalWrite(ledRed, HIGH);
+    else if (cmd == '4') digitalWrite(ledGreen, HIGH);
+    else if (cmd == '5') digitalWrite(ledWhite, HIGH);
+  }
+}
