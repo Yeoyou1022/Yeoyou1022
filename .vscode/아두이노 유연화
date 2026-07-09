@@ -1,32 +1,50 @@
+// 1. 사용할 LED의 핀 번호 정의 (전역 변수 선언)
+const int ledBlue = 9;
+const int ledYellow = 10;
+const int ledRed = 11;
+const int ledGreen = 12;
+const int ledWhite = 13;
+
+void setup() {
+  // 시리얼 통신 시작 (속도 9600)
+  Serial.begin(9600);
+  
+  // 모든 LED 핀을 출력(OUTPUT) 모드로 설정
+  pinMode(ledBlue, OUTPUT);
+  pinMode(ledYellow, OUTPUT);
+  pinMode(ledRed, OUTPUT);
+  pinMode(ledGreen, OUTPUT);
+  pinMode(ledWhite, OUTPUT);
+}
+
 void loop() {
-  // 1. 컴퓨터(파이썬)로부터 들어온 데이터가 있는지 확인
+  // 파이썬으로부터 들어온 데이터가 있는지 확인
   if (Serial.available() > 0) {
-    
-    // 2. 들어온 데이터 한 글자를 읽어서 cmd 변수에 저장
+    // 들어온 글자 하나를 읽어 cmd 변수에 저장
     char cmd = Serial.read();
 
-    // 3. 새로운 명령을 처리하기 전에 일단 모든 LED를 끕니다.
+    // 새로운 명령 처리를 위해 먼저 모든 LED를 끔
     digitalWrite(ledBlue, LOW);
     digitalWrite(ledYellow, LOW);
     digitalWrite(ledRed, LOW);
     digitalWrite(ledGreen, LOW);
     digitalWrite(ledWhite, LOW);
 
-    // 4. 수신된 cmd 문자에 따라 해당하는 LED만 켭니다.
+    // 파이썬이 보낸 숫자 문자에 따라 해당 LED만 켭니다.
     if (cmd == '1') {
-      digitalWrite(ledBlue, HIGH);    // '1'이 들어오면 파란색 ON
+      digitalWrite(ledBlue, HIGH);
     } 
     else if (cmd == '2') {
-      digitalWrite(ledYellow, HIGH);  // '2'가 들어오면 노란색 ON
+      digitalWrite(ledYellow, HIGH);
     } 
     else if (cmd == '3') {
-      digitalWrite(ledRed, HIGH);     // '3'이 들어오면 빨간색 ON
+      digitalWrite(ledRed, HIGH);
     } 
     else if (cmd == '4') {
-      digitalWrite(ledGreen, HIGH);   // '4'가 들어오면 초록색 ON
+      digitalWrite(ledGreen, HIGH);
     } 
     else if (cmd == '5') {
-      digitalWrite(ledWhite, HIGH);   // '5'가 들어오면 흰색 ON
+      digitalWrite(ledWhite, HIGH);
     }
   }
 }
