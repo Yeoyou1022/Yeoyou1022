@@ -1,0 +1,166 @@
+import cv2
+import mediapipe as mp
+import serial
+import time
+
+# ==========================
+# 아두이노 연결
+# ==========================
+arduino = serial.Serial("COM3", 9600)
+time.sleep(2)   # 아두이노 초기화 대기
+
+# ==========================
+# MediaPipe 설정
+# ==========================
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+
+# ==========================
+# 카메라 열기
+# ==========================
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+if not cap.isOpened():
+    print("카메라를 열 수 없습니다.")
+    exit()
+
+# 마지막으로 보낸 제스처
+last_gesture = -1
+
+
+# ==========================
+# 손 모양 분류 함수
+# ==========================
+def classify_gesture(hand_landmarks):
+
+    wrist = hand_landmarks.landmark[mp_hands.HandLandmark.WRIST]
+
+    tips = {
+        "thumb": hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP],
+        "index": hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP],
+        "middle": hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP],
+        "ring": hand_landmarks.landmark[mp_hands.HandLandmark.RING_FINGER_TIP],
+        "pinky": hand_landmarks.landmark[mp_hands.HandLandmark.PINKY_TIP],
+    }
+
+    fingers = {
+        name: (tip.y < wrist.y)
+        for name, tip in tips.items()
+    }
+
+    # ✊ 주먹
+    if all(not f for f in fingers.values()):
+        return 1
+
+    # ✋ 손바닥
+    elif all(f for f in fingers.values()):
+        return 2
+
+    # ✌️ 브이
+    elif (
+        fingers["index"]
+        and fingers["middle"]
+        and not fingers["ring"]
+        and not fingers["pinky"]
+    ):
+        return 3
+
+    # 👍 엄지
+    elif (
+        fingers["thumb"]
+        and not fingers["index"]
+        and not fingers["middle"]
+        and not fingers["ring"]
+        and not fingers["pinky"]
+    ):
+        return 4
+
+    # 🤟 I LOVE YOU
+    elif (
+        fingers["thumb"]
+        and fingers["index"]
+        and fingers["pinky"]
+        and not fingers["middle"]
+        and not fingers["ring"]
+    ):
+        return 5
+
+    return 0
+
+
+# ==========================
+# 손 인식 시작
+# ==========================
+with mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=1,
+    min_detection_confidence=0.7,
+    min_tracking_confidence=0.7
+) as hands:
+
+    while True:
+
+        ret, frame = cap.read()
+
+        if not ret:
+            print("카메라 프레임을 읽을 수 없습니다.")
+            break
+
+        frame = cv2.flip(frame, 1)
+
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        results = hands.process(rgb)
+
+        if results.multi_hand_landmarks:
+
+            for hand_landmarks in results.multi_hand_landmarks:
+
+                mp_drawing.draw_landmarks(
+                    frame,
+                    hand_landmarks,
+                    mp_hands.HAND_CONNECTIONS
+                )
+
+                gesture = classify_gesture(hand_landmarks)
+
+                if gesture != 0:
+
+                    cv2.putText(
+                        frame,
+                        f"Gesture : {gesture}",
+                        (10, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1,
+                        (0, 255, 0),
+                        2,
+                    )
+
+                    if gesture != last_gesture:
+
+                        print("Gesture :", gesture)
+
+                        arduino.write(f"{gesture}\n".encode())
+
+                        last_gesture = gesture
+
+        cv2.imshow("Hand Gesture Recognition", frame)
+
+        key = cv2.waitKey(1) & 0xFF
+
+        if key == 27:
+            break
+
+        if cv2.getWindowProperty(
+            "Hand Gesture Recognition",
+            cv2.WND_PROP_VISIBLE
+        ) < 1:
+            break
+
+
+# ==========================
+# 종료
+# ==========================
+cap.release()
+arduino.close()
+cv2.destroyAllWindows()
