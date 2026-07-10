@@ -1,0 +1,103 @@
+import cv2
+import mediapipe as mp
+import serial
+import time
+
+# 1. 아두이노 시리얼 통신 설정
+# 'COM3'를 본인의 아두이노 포트 번호에 맞게 수정하세요. (속도는 9600bps)
+try:
+    py_serial = serial.Serial(port='COM3', baudrate=9600, timeout=1)
+    time.sleep(2)  # 시리얼 포트가 안정화될 때까지 2초 대기
+    print("아두이노 연결 성공!")
+except Exception as e:
+    print(f"아두이노 연결 실패: {e}")
+    print("시리얼 포트 번호(COM)를 확인하세요. (임시로 카메라만 구동합니다.)")
+    py_serial = None
+
+# 2. MediaPipe 손 인식 초기화
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+hands = mp_hands.Hands(
+    max_num_hands=1,         # 인식할 최대 손 개수
+    min_detection_confidence=0.7, # 검출 신뢰도
+    min_tracking_confidence=0.7  # 추적 신뢰도
+)
+
+# 3. 카메라 입력 설정 (0번은 기본 웹캠)
+cap = cv2.VideoCapture(0)
+
+# 손가락 끝 번호 (엄지, 검지, 중지, 약지, 새끼)
+finger_tips = [4, 8, 12, 16, 20]
+prev_count = -1  # 이전 손가락 개수를 저장 (불필요한 중복 전송 방지)
+
+print("프로그램을 시작합니다. 'q'를 누르면 종료됩니다.")
+
+while cap.isOpened():
+    success, image = cap.read()
+    if not success:
+        print("카메라를 찾을 수 없습니다.")
+        continue
+
+    # 셀카 모드처럼 좌우 반전 후, MediaPipe 인식을 위해 BGR을 RGB로 변환
+    image = cv2.flip(image, 1)
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    # 손 인식 프로세싱
+    results = hands.process(image_rgb)
+
+    finger_count = 0
+
+    # 화면에 손이 포착되었을 때만 실행
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
+            # 손가락 관절 및 연결선 그리기
+            mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+            # 21개 관절의 x, y 좌표 추출
+            landmarks = hand_landmarks.landmark
+            fingers = []
+
+            # --- 엄지손가락 판별 ---
+            # 오른손/왼손 기준에 따라 x좌표를 비교 (여기서는 단순 좌우 반전 기준 4번 끝이 3번 안쪽보다 밖에 있는지 확인)
+            if landmarks[finger_tips[0]].x > landmarks[finger_tips[0] - 1].x:
+                fingers.append(1)
+            else:
+                fingers.append(0)
+
+            # --- 나머지 네 손가락 판별 (검지, 중지, 약지, 새끼) ---
+            # 손가락 끝(Tip)의 y좌표가 바로 아래 마디(Pip)의 y좌표보다 위(값이 작음)에 있으면 펴진 것으로 간주
+            for i in range(1, 5):
+                if landmarks[finger_tips[i]].y < landmarks[finger_tips[i] - 2].y:
+                    fingers.append(1)
+                else:
+                    fingers.append(0)
+
+            # 펼쳐진 손가락 개수 합산
+            finger_count = fingers.count(1)
+
+            # 손가락 개수를 화면에 텍스트로 표시
+            cv2.putText(image, f'Fingers: {finger_count}', (30, 70), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
+
+            # --- 아두이노로 데이터 전송 ---
+            # 손가락 개수가 변했을 때만, 그리고 1~5개 사이일 때만 명령어를 보냅니다.
+            if finger_count != prev_count:
+                if 1 <= finger_count <= 5 and py_serial:
+                    cmd = str(finger_count)  # '1', '2' 등의 문자열로 변환
+                    py_serial.write(cmd.encode())  # 바이트 형태로 아두이노에 전송
+                    print(f"아두이노로 전송된 명령: {cmd}")
+                prev_count = finger_count
+
+    # 영상 출력 창
+    cv2.imshow('Hand Gesture LED Control', image)
+
+    # 'q' 키를 누르면 루프 탈출 및 종료
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# 메모리 해제 및 통신 종료
+cap.release()
+cv2.destroyAllWindows()
+if py_serial:
+    py_serial.close()
+print("프로그램이 안정적으로 종료되었습니다.")
